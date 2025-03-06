@@ -4,8 +4,6 @@ from pymongo import MongoClient
 import pandas as pd
 import numpy as np
 from scipy.spatial.distance import cosine
-import matplotlib.pyplot as plt
-import requests
 from datetime import datetime
 from groq import Groq
 
@@ -27,23 +25,6 @@ def get_business(business_name):
 def get_all_businesses():
     return list(business_collection.find())
 
-def calculate_risk_score(business):
-    risks = business.get('Business Attributes', {}).get('Risk Assessment', {})
-    score = 0
-    if risks.get('Operational Risks'): score += 20
-    if risks.get('Market Risks'): score += 20
-    if risks.get('Financial Risks'): score += 20
-    return score
-
-def get_performance_metrics(business):
-    financials = business.get('Business Attributes', {}).get('Financial Metrics', {})
-    growth = business.get('Business Attributes', {}).get('Growth & Scalability', {})
-    return {
-        'Revenue': financials.get('Revenue Brackets (Annual)', 'N/A'),
-        'Profitability': financials.get('Profitability Status', 'N/A'),
-        'Growth Rate': growth.get('Growth Rate', 'N/A')
-    }
-
 def match_question(query_embedding, questions):
     best_match = None
     highest_similarity = -1
@@ -54,37 +35,15 @@ def match_question(query_embedding, questions):
             best_match = q
     return best_match
 
-def calculate_exit_readiness(business):
-    score = 0
-    financials = business.get('Business Attributes', {}).get('Financial Metrics', {})
-    growth = business.get('Business Attributes', {}).get('Growth & Scalability', {})
-    market = business.get('Business Attributes', {}).get('Market Insights', {})
-    if financials.get('Profitability Status') == 'Consistently Profitable': score += 30
-    if growth.get('Scalability Potential') == 'Highly Scalable': score += 30
-    if market.get('Market Position') == 'Market Leader': score += 20
-    return score
-
-def fetch_web_data(business_name):
-    return f"Mock news for {business_name} fetched on {datetime.now().strftime('%Y-%m-%d')}"
-
-def cluster_businesses(businesses):
-    clusters = {}
-    for b in businesses:
-        industry = b.get('Business Attributes', {}).get('Business Fundamentals', {}).get('Industry Classification', {}).get('Primary Industry', 'Other')
-        if industry not in clusters:
-            clusters[industry] = []
-        clusters[industry].append(b['business_name'])
-    return clusters
-
 def groq_qna(query, context=None):
     context_str = f"Context: {context}" if context else "No specific context provided."
     response = groq_client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[
-            {"role": "system", "content": "You are an expert business valuation analyst. Provide detailed, accurate, and actionable responses."},
+            {"role": "system", "content": "You are an expert business analyst. Provide detailed, accurate, and actionable responses."},
             {"role": "user", "content": f"{context_str}\n\nQuery: {query}"}
         ],
-        max_tokens=1000  # Increased for detailed valuation responses
+        max_tokens=1000
     )
     return response.choices[0].message.content
 
@@ -94,31 +53,13 @@ st.title("Business Insights App with Groq Integration")
 # Sidebar Navigation
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("Go to", [
-    "Business Performance Dashboard",
     "Smart Q&A",
-    "Risk Assessment",
-    "Competitive Analysis",
-    "Growth Potential Predictor",
-    "Business Profile Builder",
-    "Watchlist & Alerts",
-    "Community Insights",
-    "Exit Readiness",
-    "Acquirer Matchmaking",
-    "Investment Opportunity Filter",
-    "Trend Analysis",
-    "External Data Integration",
-    "Business Recommendations",
-    "Machine Learning Clustering",
     "Company Valuation Estimator",
     "Interactive Business Assessment",
     "Showcase Listings for Investors"
 ])
 
 # Session State
-if 'watchlist' not in st.session_state:
-    st.session_state.watchlist = []
-if 'comments' not in st.session_state:
-    st.session_state.comments = {}
 if 'valuation_data' not in st.session_state:
     st.session_state.valuation_data = {}
 if 'assessment_responses' not in st.session_state:
@@ -129,23 +70,8 @@ if 'current_question_idx' not in st.session_state:
 # Get list of business names
 business_names = [b['business_name'] for b in get_all_businesses()]
 
-# Existing Features (unchanged for brevity)
-if page == "Business Performance Dashboard":
-    st.header("Business Performance Dashboard")
-    business_name = st.selectbox("Select Business", business_names)
-    business = get_business(business_name)
-    if business:
-        metrics = get_performance_metrics(business)
-        st.subheader(f"{business['business_name']} Metrics")
-        st.write(f"**Revenue:** {metrics['Revenue']}")
-        st.write(f"**Profitability:** {metrics['Profitability']}")
-        st.write(f"**Growth Rate:** {metrics['Growth Rate']}")
-        fig, ax = plt.subplots()
-        ax.bar(metrics.keys(), [1 if v == 'N/A' else 2 for v in metrics.values()], color='skyblue')
-        plt.xticks(rotation=45)
-        st.pyplot(fig)
-
-elif page == "Smart Q&A":
+# 1. Smart Q&A
+if page == "Smart Q&A":
     st.header("Smart Q&A (Powered by Groq)")
     query = st.text_input("Ask a question (e.g., 'How does this business make money?')")
     business_name = st.selectbox("Optional: Select Business for Context", ["None"] + business_names)
@@ -158,7 +84,7 @@ elif page == "Smart Q&A":
         st.write("**Response:**")
         st.markdown(response)
 
-# Enhanced Feature: Company Valuation Estimator
+# 2. Company Valuation Estimator
 elif page == "Company Valuation Estimator":
     st.header("Company Valuation Estimator")
     st.write("Provide details about your company to estimate its value using multiple valuation methods.")
@@ -253,7 +179,7 @@ elif page == "Company Valuation Estimator":
             st.session_state.valuation_step = 0
             st.session_state.valuation_data = {}
 
-# Other Features (unchanged for brevity)
+# 3. Interactive Business Assessment
 elif page == "Interactive Business Assessment":
     st.header("Interactive Business Assessment")
     st.write("Answer questions about your business. We'll adapt based on your responses.")
@@ -273,6 +199,7 @@ elif page == "Interactive Business Assessment":
             st.session_state.current_question_idx = 0
             st.session_state.assessment_responses = {}
 
+# 4. Showcase Listings for Investors
 elif page == "Showcase Listings for Investors":
     st.header("Showcase Listings for Investors")
     tab1, tab2 = st.tabs(["List Your Business", "Investor Dashboard"])
