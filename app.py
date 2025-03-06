@@ -14,7 +14,7 @@ client = MongoClient('mongodb+srv://adhilbinmujeeb:admin123@cluster0.uz62z.mongo
 db = client['business_rag']
 business_collection = db['business_attributes']
 question_collection = db['questions']
-listings_collection = db['business_listings']  # New collection for showcased listings
+listings_collection = db['business_listings']
 
 # Groq API Setup
 GROQ_API_KEY = "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"
@@ -81,10 +81,10 @@ def groq_qna(query, context=None):
     response = groq_client.chat.completions.create(
         model="llama-3.1-8b-instant",
         messages=[
-            {"role": "system", "content": "You are a helpful business analyst. Use the context if provided."},
+            {"role": "system", "content": "You are an expert business valuation analyst. Provide detailed, accurate, and actionable responses."},
             {"role": "user", "content": f"{context_str}\n\nQuery: {query}"}
         ],
-        max_tokens=500
+        max_tokens=1000  # Increased for detailed valuation responses
     )
     return response.choices[0].message.content
 
@@ -109,9 +109,9 @@ page = st.sidebar.radio("Go to", [
     "External Data Integration",
     "Business Recommendations",
     "Machine Learning Clustering",
-    "Company Valuation Estimator",  # New Feature
-    "Interactive Business Assessment",  # New Feature
-    "Showcase Listings for Investors"  # New Feature
+    "Company Valuation Estimator",
+    "Interactive Business Assessment",
+    "Showcase Listings for Investors"
 ])
 
 # Session State
@@ -129,7 +129,7 @@ if 'current_question_idx' not in st.session_state:
 # Get list of business names
 business_names = [b['business_name'] for b in get_all_businesses()]
 
-# Existing Features (unchanged for brevity, only showing new ones below)
+# Existing Features (unchanged for brevity)
 if page == "Business Performance Dashboard":
     st.header("Business Performance Dashboard")
     business_name = st.selectbox("Select Business", business_names)
@@ -158,19 +158,21 @@ elif page == "Smart Q&A":
         st.write("**Response:**")
         st.markdown(response)
 
-# ... (Other existing features remain unchanged for brevity)
-
-# New Feature 1: Company Valuation Estimator
+# Enhanced Feature: Company Valuation Estimator
 elif page == "Company Valuation Estimator":
     st.header("Company Valuation Estimator")
-    st.write("Answer the questions to estimate your company's valuation.")
+    st.write("Provide details about your company to estimate its value using multiple valuation methods.")
 
-    # Questions to gather valuation data
+    # Initial questions to gather data
     valuation_questions = [
         "What is your company's annual revenue (in USD)?",
-        "What is your company's profitability status (e.g., Profitable, Break-even, Loss-making)?",
-        "What is your company's growth rate (e.g., High, Moderate, Low)?",
-        "What industry does your company operate in?"
+        "What are your company's annual earnings (net income, in USD)?",
+        "What is your company's EBITDA (Earnings Before Interest, Taxes, Depreciation, and Amortization, in USD)?",
+        "What industry does your company operate in?",
+        "What is your company's total assets value (in USD)?",
+        "What is your company's total liabilities (in USD)?",
+        "What are your projected cash flows for the next 5 years (comma-separated, in USD)?",
+        "What is your company's growth rate (e.g., High, Moderate, Low)?"
     ]
 
     if 'valuation_step' not in st.session_state:
@@ -186,52 +188,94 @@ elif page == "Company Valuation Estimator":
 
     if st.session_state.valuation_step >= len(valuation_questions):
         st.write("**Collected Data:**", st.session_state.valuation_data)
-        revenue = float(st.session_state.valuation_data.get(valuation_questions[0], "0").replace("$", "").replace(",", ""))
-        profitability = st.session_state.valuation_data.get(valuation_questions[1], "Loss-making")
-        growth = st.session_state.valuation_data.get(valuation_questions[2], "Low")
+        
+        # Parse inputs
+        revenue = float(st.session_state.valuation_data.get(valuation_questions[0], "0").replace("$", "").replace(",", "") or 0)
+        earnings = float(st.session_state.valuation_data.get(valuation_questions[1], "0").replace("$", "").replace(",", "") or 0)
+        ebitda = float(st.session_state.valuation_data.get(valuation_questions[2], "0").replace("$", "").replace(",", "") or 0)
         industry = st.session_state.valuation_data.get(valuation_questions[3], "Other")
+        assets = float(st.session_state.valuation_data.get(valuation_questions[4], "0").replace("$", "").replace(",", "") or 0)
+        liabilities = float(st.session_state.valuation_data.get(valuation_questions[5], "0").replace("$", "").replace(",", "") or 0)
+        cash_flows_str = st.session_state.valuation_data.get(valuation_questions[6], "0,0,0,0,0")
+        cash_flows = [float(cf.replace("$", "").replace(",", "")) for cf in cash_flows_str.split(",")]
+        growth = st.session_state.valuation_data.get(valuation_questions[7], "Low")
 
-        # Simple valuation logic (e.g., revenue multiple)
-        multiple = 2.0  # Default multiple
-        if profitability == "Profitable": multiple += 1.0
-        if growth == "High": multiple += 1.5
-        if industry in ["Tech", "Healthcare"]: multiple += 0.5
-        valuation = revenue * multiple
+        # Fetch industry benchmarks from business_attributes
+        industry_data = business_collection.find({"Business Attributes.Business Fundamentals.Industry Classification.Primary Industry": industry})
+        industry_avg_pe = 15.0  # Default P/E ratio
+        industry_avg_ebitda_multiple = 8.0  # Default EV/EBITDA multiple
+        if industry_data:
+            pe_list = [b.get('Business Attributes', {}).get('Financial Metrics', {}).get('P/E Ratio', industry_avg_pe) for b in industry_data]
+            ebitda_list = [b.get('Business Attributes', {}).get('Financial Metrics', {}).get('EV/EBITDA Multiple', industry_avg_ebitda_multiple) for b in industry_data]
+            industry_avg_pe = np.mean([float(p) for p in pe_list if isinstance(p, (int, float))]) if pe_list else industry_avg_pe
+            industry_avg_ebitda_multiple = np.mean([float(e) for e in ebitda_list if isinstance(e, (int, float))]) if ebitda_list else industry_avg_ebitda_multiple
 
-        st.write(f"**Estimated Valuation:** ${valuation:,.2f} (Based on a {multiple}x revenue multiple)")
+        # Groq Prompt for Valuation
+        valuation_prompt = f"""
+        You are an expert in business valuation. Given the following data about a company and industry benchmarks, calculate its valuation using all applicable methods:
+        - Company Data:
+          - Annual Revenue: ${revenue:,.2f}
+          - Annual Earnings (Net Income): ${earnings:,.2f}
+          - EBITDA: ${ebitda:,.2f}
+          - Industry: {industry}
+          - Total Assets: ${assets:,.2f}
+          - Total Liabilities: ${liabilities:,.2f}
+          - Projected Cash Flows (5 years): {', '.join([f'${cf:,.2f}' for cf in cash_flows])}
+          - Growth Rate: {growth}
+        - Industry Benchmarks:
+          - Average P/E Ratio: {industry_avg_pe}
+          - Average EV/EBITDA Multiple: {industry_avg_ebitda_multiple}
+
+        Valuation Methods to Use:
+        1. Market-Based:
+           - Comparable Company Analysis (CCA): Use P/E Ratio (Company Value = Earnings × P/E Multiple) and EV/EBITDA.
+           - Precedent Transactions: Suggest a multiplier based on industry norms if data is insufficient.
+        2. Income-Based:
+           - Discounted Cash Flow (DCF): Use a discount rate of 10% (WACC) unless industry suggests otherwise. Formula: Sum(CF_t / (1 + r)^t).
+           - Earnings Multiplier (EV/EBITDA): Enterprise Value = EBITDA × Industry Multiple.
+        3. Asset-Based:
+           - Book Value: Assets - Liabilities.
+           - Liquidation Value: Estimate based on assets (assume 70% recovery unless specified).
+
+        Provide a detailed response with:
+        - Calculated valuation for each method (if applicable).
+        - Explanation of why each method is suitable or not for this company based on the industry and data.
+        - A recommended valuation range combining the results.
+        """
+        
+        with st.spinner("Calculating valuation with Groq..."):
+            valuation_result = groq_qna(valuation_prompt)
+        
+        st.subheader("Valuation Results")
+        st.markdown(valuation_result)
+        
         if st.button("Reset Valuation"):
             st.session_state.valuation_step = 0
             st.session_state.valuation_data = {}
 
-# New Feature 2: Interactive Business Assessment
+# Other Features (unchanged for brevity)
 elif page == "Interactive Business Assessment":
     st.header("Interactive Business Assessment")
     st.write("Answer questions about your business. We'll adapt based on your responses.")
-
     questions = list(question_collection.find())
     if st.session_state.current_question_idx < len(questions):
         current_q = questions[st.session_state.current_question_idx]['question']
         st.write(f"**Question {st.session_state.current_question_idx + 1}:** {current_q}")
         response = st.text_input("Your Answer", key=f"q_{st.session_state.current_question_idx}")
-        
         if st.button("Submit Answer"):
             st.session_state.assessment_responses[current_q] = response
-            # Use Groq to generate a follow-up question
             follow_up = groq_qna(f"Given the answer '{response}' to '{current_q}', suggest a relevant follow-up question.")
-            st.session_state.assessment_responses[follow_up] = None  # Placeholder for next answer
+            st.session_state.assessment_responses[follow_up] = None
             st.session_state.current_question_idx += 1
-
     else:
         st.write("**Your Responses:**", st.session_state.assessment_responses)
         if st.button("Reset Assessment"):
             st.session_state.current_question_idx = 0
             st.session_state.assessment_responses = {}
 
-# New Feature 3: Showcase Listings for Investors
 elif page == "Showcase Listings for Investors":
     st.header("Showcase Listings for Investors")
     tab1, tab2 = st.tabs(["List Your Business", "Investor Dashboard"])
-
     with tab1:
         st.subheader("List Your Business")
         listing_name = st.text_input("Business Name")
@@ -239,7 +283,6 @@ elif page == "Showcase Listings for Investors":
         listing_revenue = st.number_input("Annual Revenue (USD)", min_value=0.0)
         listing_description = st.text_area("Business Description")
         listing_contact = st.text_input("Contact Info")
-        
         if st.button("Submit Listing"):
             listing = {
                 "business_name": listing_name,
@@ -251,7 +294,6 @@ elif page == "Showcase Listings for Investors":
             }
             listings_collection.insert_one(listing)
             st.success("Business listed successfully!")
-
     with tab2:
         st.subheader("Investor Dashboard")
         listings = list(listings_collection.find())
