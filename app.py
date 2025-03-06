@@ -21,7 +21,7 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 
 # Helper Functions
 def get_business(business_id):
-    return business_collection.find_one({"_id": business_id})
+    return business_collection.find_one({"business_id": business_id})
 
 def get_all_businesses():
     return list(business_collection.find())
