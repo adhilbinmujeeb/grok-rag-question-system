@@ -1,0 +1,293 @@
+import streamlit as st
+import pymongo
+from pymongo import MongoClient
+import pandas as pd
+import numpy as np
+from scipy.spatial.distance import cosine
+import matplotlib.pyplot as plt
+import requests
+from datetime import datetime
+
+# MongoDB Connection
+client = MongoClient('mongodb+srv://adhilbinmujeeb:<db_password>@cluster0.uz62z.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')  # Replace with your MongoDB URI
+db = client['business_rag']
+business_collection = db['business_attributes']
+question_collection = db['questions']
+
+# Helper Functions
+def get_business(business_id):
+    return business_collection.find_one({"_id": business_id})
+
+def get_all_businesses():
+    return list(business_collection.find())
+
+def calculate_risk_score(business):
+    risks = business.get('Business Attributes', {}).get('Risk Assessment', {})
+    score = 0
+    if risks.get('Operational Risks'): score += 20
+    if risks.get('Market Risks'): score += 20
+    if risks.get('Financial Risks'): score += 20
+    return score
+
+def get_performance_metrics(business):
+    financials = business.get('Business Attributes', {}).get('Financial Metrics', {})
+    growth = business.get('Business Attributes', {}).get('Growth & Scalability', {})
+    return {
+        'Revenue': financials.get('Revenue Brackets (Annual)', 'N/A'),
+        'Profitability': financials.get('Profitability Status', 'N/A'),
+        'Growth Rate': growth.get('Growth Rate', 'N/A')
+    }
+
+def match_question(query_embedding, questions):
+    best_match = None
+    highest_similarity = -1
+    for q in questions:
+        similarity = 1 - cosine(query_embedding, q['embedding'])
+        if similarity > highest_similarity:
+            highest_similarity = similarity
+            best_match = q
+    return best_match
+
+def calculate_exit_readiness(business):
+    score = 0
+    financials = business.get('Business Attributes', {}).get('Financial Metrics', {})
+    growth = business.get('Business Attributes', {}).get('Growth & Scalability', {})
+    market = business.get('Business Attributes', {}).get('Market Insights', {})
+    if financials.get('Profitability Status') == 'Consistently Profitable': score += 30
+    if growth.get('Scalability Potential') == 'Highly Scalable': score += 30
+    if market.get('Market Position') == 'Market Leader': score += 20
+    return score
+
+def fetch_web_data(business_name):
+    # Placeholder for web search (use your X/web search capability)
+    return f"Mock news for {business_name} fetched on {datetime.now().strftime('%Y-%m-%d')}"
+
+def cluster_businesses(businesses):
+    # Simplified clustering (e.g., by industry)
+    clusters = {}
+    for b in businesses:
+        industry = b.get('Business Attributes', {}).get('Business Fundamentals', {}).get('Industry Classification', {}).get('Primary Industry', 'Other')
+        if industry not in clusters:
+            clusters[industry] = []
+        clusters[industry].append(b['business_name'])
+    return clusters
+
+# Streamlit App
+st.title("Business Insights App")
+
+# Sidebar Navigation
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Go to", [
+    "Business Performance Dashboard",
+    "Smart Q&A",
+    "Risk Assessment",
+    "Competitive Analysis",
+    "Growth Potential Predictor",
+    "Business Profile Builder",
+    "Watchlist & Alerts",
+    "Community Insights",
+    "Exit Readiness",
+    "Acquirer Matchmaking",
+    "Investment Opportunity Filter",
+    "Trend Analysis",
+    "External Data Integration",
+    "Business Recommendations",
+    "Machine Learning Clustering"
+])
+
+# Session State for Watchlist and Community Insights
+if 'watchlist' not in st.session_state:
+    st.session_state.watchlist = []
+if 'comments' not in st.session_state:
+    st.session_state.comments = {}
+
+# 1. Business Performance Dashboard
+if page == "Business Performance Dashboard":
+    st.header("Business Performance Dashboard")
+    business_id = st.selectbox("Select Business ID", [b['_id'] for b in get_all_businesses()])
+    business = get_business(business_id)
+    if business:
+        metrics = get_performance_metrics(business)
+        st.subheader(f"{business['business_name']} Metrics")
+        st.write(f"**Revenue:** {metrics['Revenue']}")
+        st.write(f"**Profitability:** {metrics['Profitability']}")
+        st.write(f"**Growth Rate:** {metrics['Growth Rate']}")
+        fig, ax = plt.subplots()
+        ax.bar(metrics.keys(), [1 if v == 'N/A' else 2 for v in metrics.values()], color='skyblue')
+        plt.xticks(rotation=45)
+        st.pyplot(fig)
+
+# 2. Smart Q&A System
+elif page == "Smart Q&A":
+    st.header("Smart Q&A")
+    query = st.text_input("Ask a question (e.g., 'How does it make money?')")
+    if query:
+        query_embedding = np.zeros(384)  # Placeholder (replace with SentenceTransformer)
+        questions = list(question_collection.find())
+        matched_question = match_question(query_embedding, questions)
+        if matched_question:
+            st.write(f"**Matched Question:** {matched_question['question']}")
+            businesses = get_all_businesses()[:3]
+            for b in businesses:
+                st.write(f"- {b['business_name']}")
+
+# 3. Risk Assessment Report
+elif page == "Risk Assessment":
+    st.header("Risk Assessment")
+    business_id = st.selectbox("Select Business ID", [b['_id'] for b in get_all_businesses()], key="risk")
+    business = get_business(business_id)
+    if business:
+        risk_score = calculate_risk_score(business)
+        st.subheader(f"Risk Profile for {business['business_name']}")
+        st.write(f"**Risk Score:** {risk_score}/60")
+        st.progress(min(risk_score / 60, 1.0))
+
+# 4. Competitive Analysis
+elif page == "Competitive Analysis":
+    st.header("Competitive Analysis")
+    industry = st.selectbox("Select Industry", ["Tech", "Healthcare", "Finance", "Other"])
+    businesses = business_collection.find({
+        "Business Attributes.Business Fundamentals.Industry Classification.Primary Industry": industry
+    })
+    df = pd.DataFrame(list(businesses))
+    if not df.empty:
+        st.write(f"Businesses in {industry}:")
+        st.dataframe(df[['business_name', 'Business Attributes.Financial Metrics.Revenue Brackets (Annual)']])
+    else:
+        st.write("No businesses found.")
+
+# 5. Growth Potential Predictor
+elif page == "Growth Potential Predictor":
+    st.header("Growth Potential Predictor")
+    business_id = st.selectbox("Select Business ID", [b['_id'] for b in get_all_businesses()], key="growth")
+    business = get_business(business_id)
+    if business:
+        growth = business.get('Business Attributes', {}).get('Growth & Scalability', {})
+        score = 0
+        if growth.get('Growth Rate') == 'High': score += 50
+        if growth.get('Scalability Potential') == 'Highly Scalable': score += 50
+        st.write(f"**Growth Potential Score for {business['business_name']}:** {score}/100")
+
+# 6. Business Profile Builder
+elif page == "Business Profile Builder":
+    st.header("Build Your Business Profile")
+    name = st.text_input("Business Name")
+    industry = st.text_input("Primary Industry")
+    revenue = st.selectbox("Revenue Bracket", ["< $1M", "$1M-$10M", "> $10M"])
+    if st.button("Save Profile"):
+        new_business = {
+            "_id": f"custom_{name.lower().replace(' ', '_')}",
+            "business_name": name,
+            "Business Attributes": {
+                "Business Fundamentals": {"Industry Classification": {"Primary Industry": industry}},
+                "Financial Metrics": {"Revenue Brackets (Annual)": revenue}
+            }
+        }
+        business_collection.insert_one(new_business)
+        st.success("Profile saved!")
+
+# 7. Watchlist & Alerts
+elif page == "Watchlist & Alerts":
+    st.header("Watchlist & Alerts")
+    business_id = st.selectbox("Add to Watchlist", [b['_id'] for b in get_all_businesses()], key="watch")
+    if st.button("Add to Watchlist"):
+        if business_id not in st.session_state.watchlist:
+            st.session_state.watchlist.append(business_id)
+    st.write("**Your Watchlist:**", [get_business(bid)['business_name'] for bid in st.session_state.watchlist])
+    # Placeholder alert (simplified)
+    if st.session_state.watchlist:
+        st.write("Alert: Check your watchlist for updates!")
+
+# 8. Community Insights
+elif page == "Community Insights":
+    st.header("Community Insights")
+    business_id = st.selectbox("Select Business", [b['_id'] for b in get_all_businesses()], key="community")
+    comment = st.text_area("Add a Comment")
+    if st.button("Submit Comment"):
+        if business_id not in st.session_state.comments:
+            st.session_state.comments[business_id] = []
+        st.session_state.comments[business_id].append(comment)
+        st.success("Comment added!")
+    if business_id in st.session_state.comments:
+        st.write("**Comments:**", st.session_state.comments[business_id])
+
+# 9. Exit Readiness
+elif page == "Exit Readiness":
+    st.header("Exit Readiness")
+    business_id = st.selectbox("Select Business ID", [b['_id'] for b in get_all_businesses()], key="exit")
+    business = get_business(business_id)
+    if business:
+        score = calculate_exit_readiness(business)
+        st.write(f"**Exit Readiness Score for {business['business_name']}:** {score}/80")
+        st.progress(min(score / 80, 1.0))
+
+# 10. Acquirer Matchmaking Tool
+elif page == "Acquirer Matchmaking":
+    st.header("Acquirer Matchmaking")
+    business_id = st.selectbox("Select Business", [b['_id'] for b in get_all_businesses()], key="acquirer")
+    business = get_business(business_id)
+    if business:
+        industry = business.get('Business Attributes', {}).get('Business Fundamentals', {}).get('Industry Classification', {}).get('Primary Industry')
+        matches = business_collection.find({
+            "Business Attributes.Business Fundamentals.Industry Classification.Primary Industry": industry,
+            "Business Attributes.Financial Metrics.Revenue Brackets (Annual)": {"$gt": business.get('Business Attributes', {}).get('Financial Metrics', {}).get('Revenue Brackets (Annual)', '')}
+        })
+        st.write("**Potential Acquirers:**")
+        for m in matches:
+            st.write(f"- {m['business_name']}")
+
+# 11. Investment Opportunity Filter
+elif page == "Investment Opportunity Filter":
+    st.header("Investment Opportunity Filter")
+    stage = st.selectbox("Development Stage", ["Pre-Revenue", "Early Stage", "Growth Stage"])
+    businesses = business_collection.find({"Business Attributes.Business Fundamentals.Development Stage": stage})
+    df = pd.DataFrame(list(businesses))
+    if not df.empty:
+        st.dataframe(df[['business_name', 'Business Attributes.Financial Metrics.Revenue Brackets (Annual)']])
+    if st.button("Export to CSV"):
+        df.to_csv("investment_opportunities.csv", index=False)
+        st.success("Exported to investment_opportunities.csv")
+
+# 12. Trend Analysis (Simplified - assumes timestamp field)
+elif page == "Trend Analysis":
+    st.header("Trend Analysis")
+    business_id = st.selectbox("Select Business", [b['_id'] for b in get_all_businesses()], key="trend")
+    # Mock data (add timestamp to your dataset for real trends)
+    mock_trends = pd.DataFrame({
+        "Date": pd.date_range(start="2023-01-01", periods=5, freq="M"),
+        "Revenue": [1e6, 1.2e6, 1.5e6, 1.8e6, 2e6]
+    })
+    st.line_chart(mock_trends.set_index("Date"))
+
+# 13. External Data Integration
+elif page == "External Data Integration":
+    st.header("External Data Integration")
+    business_id = st.selectbox("Select Business", [b['_id'] for b in get_all_businesses()], key="external")
+    business = get_business(business_id)
+    if business:
+        external_data = fetch_web_data(business['business_name'])
+        st.write(f"**External Data:** {external_data}")
+
+# 14. Personalized Business Recommendations
+elif page == "Business Recommendations":
+    st.header("Business Recommendations")
+    interest = st.text_input("Enter your interests (e.g., 'tech startups')")
+    if interest:
+        # Simplified: filter by industry (use embeddings for advanced)
+        businesses = business_collection.find({"Business Attributes.Business Fundamentals.Industry Classification.Primary Industry": "Tech"})
+        for b in businesses:
+            st.write(f"- {b['business_name']}")
+
+# 15. Machine Learning Clustering
+elif page == "Machine Learning Clustering":
+    st.header("Machine Learning Clustering")
+    businesses = get_all_businesses()
+    clusters = cluster_businesses(businesses)
+    for industry, names in clusters.items():
+        st.write(f"**Cluster: {industry}**")
+        st.write(", ".join(names))
+
+# Footer
+st.sidebar.write(f"Current Date: {datetime.now().strftime('%Y-%m-%d')}")
+if __name__ == "__main__":
+    st.write("Navigate using the sidebar!")
