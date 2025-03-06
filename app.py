@@ -7,12 +7,17 @@ from scipy.spatial.distance import cosine
 import matplotlib.pyplot as plt
 import requests
 from datetime import datetime
+from groq import Groq  # Import Groq API client
 
 # MongoDB Connection
-client = MongoClient('mongodb+srv://adhilbinmujeeb:<db_password>@cluster0.uz62z.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')  # Replace with your MongoDB URI
+client = MongoClient('mongodb+srv://adhilbinmujeeb:admin123@cluster0.uz62z.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')  # Replace with your MongoDB URI
 db = client['business_rag']
 business_collection = db['business_attributes']
 question_collection = db['questions']
+
+# Groq API Setup
+GROQ_API_KEY = "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"  # Replace with your actual Groq API key
+groq_client = Groq(api_key=GROQ_API_KEY)
 
 # Helper Functions
 def get_business(business_id):
@@ -59,11 +64,9 @@ def calculate_exit_readiness(business):
     return score
 
 def fetch_web_data(business_name):
-    # Placeholder for web search (use your X/web search capability)
     return f"Mock news for {business_name} fetched on {datetime.now().strftime('%Y-%m-%d')}"
 
 def cluster_businesses(businesses):
-    # Simplified clustering (e.g., by industry)
     clusters = {}
     for b in businesses:
         industry = b.get('Business Attributes', {}).get('Business Fundamentals', {}).get('Industry Classification', {}).get('Primary Industry', 'Other')
@@ -72,8 +75,21 @@ def cluster_businesses(businesses):
         clusters[industry].append(b['business_name'])
     return clusters
 
+# Groq-powered Q&A Function
+def groq_qna(query, business_data=None):
+    context = f"Business Data: {business_data}" if business_data else "General knowledge query."
+    response = groq_client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[
+            {"role": "system", "content": "You are a helpful business analyst. Use the provided context if available."},
+            {"role": "user", "content": f"{context}\n\nQuery: {query}"}
+        ],
+        max_tokens=500
+    )
+    return response.choices[0].message.content
+
 # Streamlit App
-st.title("Business Insights App")
+st.title("Business Insights App with Groq Integration")
 
 # Sidebar Navigation
 st.sidebar.title("Navigation")
@@ -95,7 +111,7 @@ page = st.sidebar.radio("Go to", [
     "Machine Learning Clustering"
 ])
 
-# Session State for Watchlist and Community Insights
+# Session State
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = []
 if 'comments' not in st.session_state:
@@ -117,21 +133,23 @@ if page == "Business Performance Dashboard":
         plt.xticks(rotation=45)
         st.pyplot(fig)
 
-# 2. Smart Q&A System
+# 2. Smart Q&A System (Enhanced with Groq)
 elif page == "Smart Q&A":
-    st.header("Smart Q&A")
-    query = st.text_input("Ask a question (e.g., 'How does it make money?')")
-    if query:
-        query_embedding = np.zeros(384)  # Placeholder (replace with SentenceTransformer)
-        questions = list(question_collection.find())
-        matched_question = match_question(query_embedding, questions)
-        if matched_question:
-            st.write(f"**Matched Question:** {matched_question['question']}")
-            businesses = get_all_businesses()[:3]
-            for b in businesses:
-                st.write(f"- {b['business_name']}")
+    st.header("Smart Q&A (Powered by Groq)")
+    query = st.text_input("Ask a question (e.g., 'How does this business make money?')")
+    business_id = st.selectbox("Optional: Select Business for Context", ["None"] + [b['_id'] for b in get_all_businesses()])
+    
+    if query and st.button("Submit"):
+        if business_id != "None":
+            business = get_business(business_id)
+            business_data = str(business)
+            response = groq_qna(query, business_data)
+        else:
+            response = groq_qna(query)
+        st.write("**Response:**")
+        st.markdown(response)
 
-# 3. Risk Assessment Report
+# 3. Risk Assessment
 elif page == "Risk Assessment":
     st.header("Risk Assessment")
     business_id = st.selectbox("Select Business ID", [b['_id'] for b in get_all_businesses()], key="risk")
@@ -194,7 +212,6 @@ elif page == "Watchlist & Alerts":
         if business_id not in st.session_state.watchlist:
             st.session_state.watchlist.append(business_id)
     st.write("**Your Watchlist:**", [get_business(bid)['business_name'] for bid in st.session_state.watchlist])
-    # Placeholder alert (simplified)
     if st.session_state.watchlist:
         st.write("Alert: Check your watchlist for updates!")
 
@@ -221,7 +238,7 @@ elif page == "Exit Readiness":
         st.write(f"**Exit Readiness Score for {business['business_name']}:** {score}/80")
         st.progress(min(score / 80, 1.0))
 
-# 10. Acquirer Matchmaking Tool
+# 10. Acquirer Matchmaking
 elif page == "Acquirer Matchmaking":
     st.header("Acquirer Matchmaking")
     business_id = st.selectbox("Select Business", [b['_id'] for b in get_all_businesses()], key="acquirer")
@@ -248,11 +265,10 @@ elif page == "Investment Opportunity Filter":
         df.to_csv("investment_opportunities.csv", index=False)
         st.success("Exported to investment_opportunities.csv")
 
-# 12. Trend Analysis (Simplified - assumes timestamp field)
+# 12. Trend Analysis
 elif page == "Trend Analysis":
     st.header("Trend Analysis")
     business_id = st.selectbox("Select Business", [b['_id'] for b in get_all_businesses()], key="trend")
-    # Mock data (add timestamp to your dataset for real trends)
     mock_trends = pd.DataFrame({
         "Date": pd.date_range(start="2023-01-01", periods=5, freq="M"),
         "Revenue": [1e6, 1.2e6, 1.5e6, 1.8e6, 2e6]
@@ -268,15 +284,14 @@ elif page == "External Data Integration":
         external_data = fetch_web_data(business['business_name'])
         st.write(f"**External Data:** {external_data}")
 
-# 14. Personalized Business Recommendations
+# 14. Business Recommendations (Enhanced with Groq)
 elif page == "Business Recommendations":
-    st.header("Business Recommendations")
+    st.header("Business Recommendations (Powered by Groq)")
     interest = st.text_input("Enter your interests (e.g., 'tech startups')")
-    if interest:
-        # Simplified: filter by industry (use embeddings for advanced)
-        businesses = business_collection.find({"Business Attributes.Business Fundamentals.Industry Classification.Primary Industry": "Tech"})
-        for b in businesses:
-            st.write(f"- {b['business_name']}")
+    if interest and st.button("Get Recommendations"):
+        response = groq_qna(f"Recommend businesses based on interest: {interest}")
+        st.write("**Recommendations:**")
+        st.markdown(response)
 
 # 15. Machine Learning Clustering
 elif page == "Machine Learning Clustering":
