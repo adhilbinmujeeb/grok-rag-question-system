@@ -10,13 +10,13 @@ from datetime import datetime
 from groq import Groq  # Import Groq API client
 
 # MongoDB Connection
-client = MongoClient('mongodb://localhost:27017/')  # Replace with your MongoDB URI
-db = client['my-business-app']
-business_collection = db['businesses']
+client = MongoClient('mongodb+srv://adhilbinmujeeb:admin123@cluster0.uz62z.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')  # Replace with your MongoDB URI
+db = client['business_rag']
+business_collection = db['business_attributes']
 question_collection = db['questions']
 
 # Groq API Setup
-GROQ_API_KEY = "your_groq_api_key_here"  # Replace with your actual Groq API key
+GROQ_API_KEY = "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"  # Replace with your actual Groq API key
 groq_client = Groq(api_key=GROQ_API_KEY)
 
 # Helper Functions
