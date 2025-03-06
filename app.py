@@ -21,7 +21,7 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 
 # Helper Functions
 def get_business(business_id):
-    return business_collection.find_one({"business_id": business_id})
+    return business_collection.find_one({"business_name": business_id})
 
 def get_all_businesses():
     return list(business_collection.find())
@@ -120,7 +120,7 @@ if 'comments' not in st.session_state:
 # 1. Business Performance Dashboard
 if page == "Business Performance Dashboard":
     st.header("Business Performance Dashboard")
-    business_id = st.selectbox("Select Business ID", [b['business_id'] for b in get_all_businesses()])
+    business_id = st.selectbox("Select Business ID", [b['business_name'] for b in get_all_businesses()])
     business = get_business(business_id)
     if business:
         metrics = get_performance_metrics(business)
@@ -137,11 +137,11 @@ if page == "Business Performance Dashboard":
 elif page == "Smart Q&A":
     st.header("Smart Q&A (Powered by Groq)")
     query = st.text_input("Ask a question (e.g., 'How does this business make money?')")
-    business_id = st.selectbox("Optional: Select Business for Context", ["None"] + [b['business_id'] for b in get_all_businesses()])
+    business_id = st.selectbox("Optional: Select Business for Context", ["None"] + [b['business_name'] for b in get_all_businesses()])
     
     if query and st.button("Submit"):
         if business_id != "None":
-            business = get_business(business_id)
+            business = get_business(business_name)
             business_data = str(business)
             response = groq_qna(query, business_data)
         else:
@@ -152,7 +152,7 @@ elif page == "Smart Q&A":
 # 3. Risk Assessment
 elif page == "Risk Assessment":
     st.header("Risk Assessment")
-    business_id = st.selectbox("Select Business ID", [b['business_id'] for b in get_all_businesses()], key="risk")
+    business_id = st.selectbox("Select Business ID", [b['business_name'] for b in get_all_businesses()], key="risk")
     business = get_business(business_id)
     if business:
         risk_score = calculate_risk_score(business)
@@ -177,7 +177,7 @@ elif page == "Competitive Analysis":
 # 5. Growth Potential Predictor
 elif page == "Growth Potential Predictor":
     st.header("Growth Potential Predictor")
-    business_id = st.selectbox("Select Business ID", [b['business_id'] for b in get_all_businesses()], key="growth")
+    business_id = st.selectbox("Select Business ID", [b['business_name'] for b in get_all_businesses()], key="growth")
     business = get_business(business_id)
     if business:
         growth = business.get('Business Attributes', {}).get('Growth & Scalability', {})
@@ -207,7 +207,7 @@ elif page == "Business Profile Builder":
 # 7. Watchlist & Alerts
 elif page == "Watchlist & Alerts":
     st.header("Watchlist & Alerts")
-    business_id = st.selectbox("Add to Watchlist", [b['business_id'] for b in get_all_businesses()], key="watch")
+    business_id = st.selectbox("Add to Watchlist", [b['business_name'] for b in get_all_businesses()], key="watch")
     if st.button("Add to Watchlist"):
         if business_id not in st.session_state.watchlist:
             st.session_state.watchlist.append(business_id)
@@ -218,7 +218,7 @@ elif page == "Watchlist & Alerts":
 # 8. Community Insights
 elif page == "Community Insights":
     st.header("Community Insights")
-    business_id = st.selectbox("Select Business", [b['business_id'] for b in get_all_businesses()], key="community")
+    business_id = st.selectbox("Select Business", [b['business_name'] for b in get_all_businesses()], key="community")
     comment = st.text_area("Add a Comment")
     if st.button("Submit Comment"):
         if business_id not in st.session_state.comments:
@@ -231,7 +231,7 @@ elif page == "Community Insights":
 # 9. Exit Readiness
 elif page == "Exit Readiness":
     st.header("Exit Readiness")
-    business_id = st.selectbox("Select Business ID", [b['business_id'] for b in get_all_businesses()], key="exit")
+    business_id = st.selectbox("Select Business ID", [b['business_name'] for b in get_all_businesses()], key="exit")
     business = get_business(business_id)
     if business:
         score = calculate_exit_readiness(business)
@@ -241,7 +241,7 @@ elif page == "Exit Readiness":
 # 10. Acquirer Matchmaking
 elif page == "Acquirer Matchmaking":
     st.header("Acquirer Matchmaking")
-    business_id = st.selectbox("Select Business", [b['_id'] for b in get_all_businesses()], key="acquirer")
+    business_id = st.selectbox("Select Business", [b['business_name'] for b in get_all_businesses()], key="acquirer")
     business = get_business(business_id)
     if business:
         industry = business.get('Business Attributes', {}).get('Business Fundamentals', {}).get('Industry Classification', {}).get('Primary Industry')
@@ -268,7 +268,7 @@ elif page == "Investment Opportunity Filter":
 # 12. Trend Analysis
 elif page == "Trend Analysis":
     st.header("Trend Analysis")
-    business_id = st.selectbox("Select Business", [b['business_id'] for b in get_all_businesses()], key="trend")
+    business_id = st.selectbox("Select Business", [b['business_name'] for b in get_all_businesses()], key="trend")
     mock_trends = pd.DataFrame({
         "Date": pd.date_range(start="2023-01-01", periods=5, freq="M"),
         "Revenue": [1e6, 1.2e6, 1.5e6, 1.8e6, 2e6]
@@ -278,7 +278,7 @@ elif page == "Trend Analysis":
 # 13. External Data Integration
 elif page == "External Data Integration":
     st.header("External Data Integration")
-    business_id = st.selectbox("Select Business", [b['business_id'] for b in get_all_businesses()], key="external")
+    business_id = st.selectbox("Select Business", [b['business_name'] for b in get_all_businesses()], key="external")
     business = get_business(business_id)
     if business:
         external_data = fetch_web_data(business['business_name'])
