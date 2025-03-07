@@ -6,3 +6,4 @@ scipy
 matplotlib
 requests
 groq
+python-dotenv
