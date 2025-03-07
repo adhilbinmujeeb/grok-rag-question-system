@@ -388,11 +388,18 @@ elif "Company Valuation" in page:
 # 3. Interactive Business Assessment
 elif "Business Assessment" in page:
     st.markdown("# 📊 Interactive Business Assessment")
-    st.markdown("Get personalized insights through an adaptive business evaluation that responds to your inputs.")
+    st.markdown("Get personalized insights through an adaptive business evaluation. Answer a few key questions to uncover valuable insights.")
 
     # Get questions from database - Caching this is good too if questions don't change frequently
     questions = list(question_collection.find())
     total_questions = len(questions)
+
+    # Limit the number of questions displayed
+    max_questions_to_ask = 5  # Reduced number of questions
+    if total_questions > max_questions_to_ask:
+        questions = questions[:max_questions_to_ask]
+        total_questions = len(questions)
+
     current_index = st.session_state.current_question_idx
 
     # Display progress
@@ -420,6 +427,44 @@ elif "Business Assessment" in page:
             #     st.session_state.assessment_responses[follow_up] = None  # Storing follow-up but not using it
 
             st.session_state.current_question_idx += 1
+            st.experimental_rerun()
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    else:
+        # Show assessment summary and results
+        st.markdown("<div class='card'>", unsafe_allow_html=True)
+        st.markdown("## Business Assessment Results")
+
+        # Prepare data for analysis
+        assessment_data = "\n".join([f"Q: {q}\nA: {a}" for q, a in st.session_state.assessment_responses.items() if a is not None])
+
+        # Generate analysis with Groq
+        analysis_prompt = f"""
+        You are an expert business consultant. Based on the following business assessment responses,
+        provide a detailed analysis of the business strengths, weaknesses, and growth opportunities.
+
+        Assessment Responses:
+        {assessment_data}
+
+        Please include:
+        1. Executive Summary
+        2. Key Strengths Identified
+        3. Areas for Improvement
+        4. Strategic Recommendations
+        5. Next Steps
+
+        Format your response with clear headings and bullet points.
+        """
+
+        with st.spinner("Generating business assessment report..."):
+            analysis_result = groq_qna(analysis_prompt)
+
+        st.markdown(analysis_result)
+
+        if st.button("Start New Assessment", use_container_width=True):
+            st.session_state.current_question_idx = 0
+            st.session_state.assessment_responses = {}
             st.experimental_rerun()
 
         st.markdown("</div>", unsafe_allow_html=True)
