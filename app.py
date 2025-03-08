@@ -126,7 +126,7 @@ def get_business(business_name):
     return business_collection.find_one({"business_name": business_name})
 
 @st.cache_data(ttl=3600)
-def get_all_businesses(limit=100):
+def get_all_businesses(limit=2072):
     return list(business_collection.find().limit(limit))
 
 def match_question(query_embedding, questions):
