@@ -406,7 +406,7 @@ elif "Business Assessment" in page:
         st.error("No assessment questions available in the database.")
     else:
         total_questions = len(questions)
-        max_questions_to_ask = 5
+        max_questions_to_ask = 15
         if total_questions > max_questions_to_ask:
             questions = questions[:max_questions_to_ask]
             total_questions = len(questions)
