@@ -302,7 +302,7 @@ After completing the interview, prepare:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"{context_str}\n\nQuery: {query}"}
             ],
-            max_tokens=100000
+            max_tokens=8000
         )
         return response.choices[0].message.content
     except RateLimitError:
